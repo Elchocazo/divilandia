@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>El Bosque Numérico: Aventura de Mascotas</title>
+    <!-- Favicon simple usando emoji -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌲</text></svg>">
+    
+    <!-- Dependencias Externas (CDNs para GitHub Pages) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Estilos base */
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #f0fdf4;
+            background-image: 
+                radial-gradient(#86efac 3px, transparent 3px),
+                radial-gradient(#bbf7d0 3px, transparent 3px);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
+            overscroll-behavior: none;
+            user-select: none;
+            color: #14532d;
+            /* Prevenir el rebote de scroll en móviles */
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .handwritten { font-family: 'Patrick Hand', cursive; }
+
+        .app-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            padding-bottom: 40px;
+        }
+
+        /* Canvas con borde de madera */
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            background: #fff;
+            border-radius: 24px;
+            box-shadow: 0 10px 0 #166534, 0 20px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border: 6px solid #22c55e;
+        }
+
+        .input-overlay {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            font-family: 'Patrick Hand', cursive;
+            font-size: 38px;
+            text-align: center;
+            background: #fffbeb;
+            border: 3px dashed #d97706;
+            border-radius: 12px;
+            outline: none;
+            z-index: 10;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            letter-spacing: 2px;
+            color: #78350f;
+        }
+        .input-overlay:focus {
+            background: #fff;
+            transform: translate(-50%, -50%) scale(1.15);
+            border-color: #f59e0b;
+        }
+
+        .mission-card {
+            transition: all 0.2s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .mission-card:hover:not(.locked) {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 30px -5px rgba(0,0,0,0.15);
+        }
+        .mission-card.locked {
+            opacity: 0.7;
+            filter: grayscale(0.8);
+            cursor: not-allowed;
+            background-color: #e5e7eb;
+        }
+        
+        .btn-nature {
+            transition: all 0.1s;
+            box-shadow: 0 6px 0 rgba(0,0,0,0.2);
+        }
+        .btn-nature:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 rgba(0,0,0,0);
+        }
+
+        .pet-slot {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.05);
+            border: 2px solid #e2e8f0;
+            transition: transform 0.2s;
+        }
+        .pet-slot:hover { transform: scale(1.05); }
+        .pet-slot.empty { background: #f1f5f9; color: #cbd5e1; font-size: 1.5rem; }
+        
+        .hidden { display: none !important; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+
+        @keyframes hatch {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-10deg); }
+            50% { transform: rotate(10deg); }
+            75% { transform: rotate(-5deg); }
+            100% { transform: rotate(0deg); }
+        }
+        .hatching { animation: hatch 0.5s infinite; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center pt-6 px-3 pb-12 overflow-y-auto">
+
+    <!-- MENÚ PRINCIPAL -->
+    <div id="mainMenu" class="w-full max-w-4xl">
+        <div class="text-center mb-10">
+            <div class="inline-block bg-white px-8 py-4 rounded-3xl shadow-lg border-b-8 border-green-200 mb-4">
+                <h1 class="text-5xl md:text-6xl font-bold text-green-600 drop-shadow-sm animate-float">🌳 El Bosque Numérico</h1>
+            </div>
+            <p class="text-xl text-green-800 font-handwritten mt-2">¡Resuelve divisiones y rescata a las mascotas del bosque!</p>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-6 items-start">
+            
+            <!-- Columna Izquierda: Misiones -->
+            <div class="flex-1 w-full">
+                <div class="bg-white/80 backdrop-blur rounded-3xl p-6 shadow-xl border-2 border-green-100">
+                    <h2 class="text-2xl font-bold text-green-700 mb-4 flex items-center gap-2">
+                        🗺️ Mapa del Bosque
+                    </h2>
+                    <div class="grid grid-cols-1 gap-4" id="levelGrid">
+                        <!-- Levels injected via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Santuario de Mascotas -->
+            <div class="w-full md:w-80 shrink-0">
+                <div class="bg-yellow-50 rounded-3xl p-6 shadow-xl border-4 border-yellow-200 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-yellow-200 rounded-full opacity-50"></div>
+                    
+                    <h2 class="text-2xl font-bold text-yellow-800 mb-2 flex items-center gap-2">
+                        🐾 Santuario
+                    </h2>
+                    <p class="text-sm text-yellow-700 mb-4 font-handwritten leading-tight">
+                        Completa niveles para conseguir huevos y descubrir nuevas mascotas.
+                    </p>
+                    
+                    <!-- Huevos pendientes -->
+                    <div id="eggContainer" class="bg-white rounded-xl p-3 mb-4 flex justify-center items-center min-h-[80px] border-2 border-yellow-100 shadow-inner cursor-pointer hover:bg-yellow-50 transition-colors" onclick="app.hatchEgg()">
+                        <span class="text-gray-400 text-sm text-center italic">No tienes huevos pendientes.<br>¡Juega para ganar uno!</span>
+                    </div>
+
+                    <!-- Grid de Mascotas -->
+                    <div class="grid grid-cols-4 gap-2" id="petGrid">
+                        <!-- Pets injected JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA DE JUEGO -->
+    <div id="gameView" class="app-container hidden">
+        
+        <!-- HUD -->
+        <div class="flex justify-between items-center mb-4 px-2">
+            <button onclick="app.goToMenu()" class="bg-white hover:bg-green-50 text-green-700 font-bold py-2 px-5 rounded-xl btn-nature border-2 border-green-200 flex items-center gap-2">
+                <span>🌿</span> Volver
+            </button>
+            
+            <div class="flex flex-col items-center">
+                <div class="bg-white px-8 py-2 rounded-2xl border-b-4 border-green-200 shadow-sm flex items-center gap-3">
+                    <span class="text-2xl">🌲</span>
+                    <div class="text-center">
+                        <div class="text-xs font-bold text-green-400 uppercase tracking-wider">Nivel</div>
+                        <div class="text-xl font-bold text-green-800 leading-none" id="levelTitleDisplay">1</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white px-4 py-2 rounded-xl border-b-4 border-blue-200 shadow-sm">
+                <div class="text-xs font-bold text-blue-400 uppercase text-center">Progreso</div>
+                <div class="text-xl font-bold text-blue-600">
+                    <span id="progressCurrent">1</span> / <span id="progressTotal">10</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensaje Tutor -->
+        <div id="messageBox" class="w-full bg-white border-l-8 border-green-500 text-green-800 p-5 rounded-2xl shadow-md mb-6 min-h-[80px] flex items-center text-xl font-medium relative overflow-hidden">
+            <div class="relative z-10" id="messageText">¡Bienvenido al bosque!</div>
+            <div class="absolute right-0 bottom-0 opacity-10 text-8xl -mb-4 -mr-4">🍃</div>
+        </div>
+
+        <!-- Canvas -->
+        <div class="canvas-wrapper" id="canvasContainer">
+            <canvas id="gameCanvas"></canvas>
+            <input type="text" inputmode="none" id="virtualInput" class="input-overlay hidden" readonly>
+        </div>
+
+        <!-- Controles -->
+        <div class="mt-6 flex justify-center">
+            <!-- Botón Continuar -->
+            <button id="mainActionBtn" onclick="window.game.handleAction()" class="bg-orange-500 hover:bg-orange-600 text-white text-2xl font-bold py-4 px-12 rounded-2xl btn-nature w-full max-w-xs hidden shadow-orange-700">
+                Continuar ➡
+            </button>
+        </div>
+
+        <!-- Teclado -->
+        <div id="numpad" class="mt-6 w-full max-w-lg mx-auto hidden">
+            <div class="bg-green-800 p-3 rounded-3xl shadow-xl border-b-8 border-green-900">
+                <div class="grid grid-cols-3 gap-2">
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(1)">1</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(2)">2</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(3)">3</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(4)">4</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(5)">5</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(6)">6</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(7)">7</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(8)">8</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(9)">9</button>
+                    <button class="btn-nature bg-red-100 text-red-600 text-2xl font-bold p-4 rounded-xl" onclick="window.game.deleteDigit()">⌫</button>
+                    <button class="btn-nature bg-green-50 text-green-800 text-2xl font-bold p-4 rounded-xl" onclick="window.game.inputDigit(0)">0</button>
+                    <button class="btn-nature bg-green-500 text-white text-2xl font-bold p-4 rounded-xl border-b-4 border-green-700" onclick="window.game.submitInput()">✔</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modales -->
+    
+    <!-- Modal Nivel Completado + Huevo -->
+    <div id="levelCompleteModal" class="fixed inset-0 bg-green-900/80 flex items-center justify-center z-50 hidden backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-[90%] text-center shadow-2xl animate-float border-4 border-green-400 relative">
+            <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 text-8xl">🥚</div>
+            <h2 class="text-3xl font-bold text-green-700 mt-10 mb-2 font-handwritten">¡Nivel Completado!</h2>
+            <p class="text-gray-600 text-lg mb-6">Has encontrado un <strong class="text-orange-500">Huevo Misterioso</strong>.</p>
+            <button onclick="app.finishLevel()" class="w-full bg-green-500 hover:bg-green-600 text-white text-xl font-bold py-4 px-8 rounded-2xl btn-nature shadow-green-700">
+                Ir al Santuario 🐾
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Problema Correcto -->
+    <div id="problemCompleteModal" class="fixed inset-0 bg-black/20 flex items-center justify-center z-40 hidden backdrop-blur-[2px]">
+        <div class="bg-white rounded-2xl p-6 max-w-xs w-[90%] text-center shadow-xl border-b-8 border-green-500 transform scale-100 transition-transform">
+            <div class="text-5xl mb-2 animate-bounce">🌟</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">¡Muy Bien!</h2>
+            <button onclick="app.nextProblem()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-xl btn-nature w-full">
+                Siguiente ➡
+            </button>
+        </div>
+    </div>
+
+<script>
+/**
+ * Configuración de Juego y Datos
+ */
+const APP_DATA = {
+    levels: [
+        { id: 1, count: 5, title: "Sendero Inicial", digits: 2, divisorRange: [2, 5], exact: true, desc: "Divisiones simples y exactas." },
+        { id: 2, count: 8, title: "Claro del Bosque", digits: 3, divisorRange: [2, 6], exact: true, desc: "Números de 3 cifras." },
+        { id: 3, count: 10, title: "Río Tortuoso", digits: 3, divisorRange: [3, 8], exact: false, desc: "¡Cuidado! A veces sobran números." },
+        { id: 4, count: 12, title: "Cueva del Oso", digits: 3, divisorRange: [4, 9], exact: false, desc: "Divisores grandes y residuos." },
+        { id: 5, count: 15, title: "Cima de la Montaña", digits: 4, divisorRange: [3, 9], exact: false, desc: "El reto final de 4 cifras." }
+    ],
+    progress: 1, 
+    petsUnlocked: [], 
+    hasPendingEgg: false,
+    // Colección MASIVA de mascotas para garantizar variedad
+    masterPetCollection: [
+        '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🦉',
+        '🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑',
+        '🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛','🦏','🐪',
+        '🐫','🦒','🦘','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🐈','🐓','🦃','🦚','🦜',
+        '🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦦','🦥','🐁','🐀','🐿️','🦔','🐉','🐲','🌵','🍄','🌲','🌳','🌴'
+    ],
+    // Se llenará al iniciar con una mezcla aleatoria
+    shuffledPetCollection: []
+};
+
+/**
+ * Utilidad para barajar array (Fisher-Yates Shuffle)
+ */
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+/**
+ * Lógica Principal de la App
+ */
+class AppManager {
+    constructor() {
+        this.currentLevelIdx = 0;
+        this.problemsSolvedInLevel = 0;
+        
+        // Al iniciar la app, barajamos la colección maestra
+        // Esto asegura que el orden de aparición sea diferente en cada sesión
+        APP_DATA.shuffledPetCollection = shuffleArray([...APP_DATA.masterPetCollection]);
+        
+        this.renderMenu();
+        this.renderPets();
+    }
+
+    renderMenu() {
+        const grid = document.getElementById('levelGrid');
+        grid.innerHTML = '';
+
+        APP_DATA.levels.forEach((level, idx) => {
+            const isLocked = (idx + 1) > APP_DATA.progress;
+            const card = document.createElement('div');
+            const colorClass = idx % 2 === 0 ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200';
+            
+            card.className = `mission-card rounded-2xl p-4 border-l-8 shadow-sm flex items-center justify-between ${isLocked ? 'locked border-gray-300 bg-gray-100' : colorClass}`;
+            
+            let icon = isLocked ? '🔒' : (idx === APP_DATA.levels.length -1 ? '🏔️' : '🌲');
+            
+            card.innerHTML = `
+                <div>
+                    <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nivel ${level.id}</div>
+                    <h3 class="text-xl font-bold text-gray-800 leading-tight">${level.title}</h3>
+                    <p class="text-sm text-gray-500 mt-1">${level.count} divisiones • ${level.exact ? 'Exactas' : 'Con Residuo'}</p>
+                </div>
+                <div class="text-4xl ml-4">${icon}</div>
+            `;
+            
+            if (!isLocked) {
+                card.onclick = () => this.startLevel(idx);
+            }
+            grid.appendChild(card);
+        });
+
+        this.updateEggStatus();
+        document.getElementById('mainMenu').classList.remove('hidden');
+        document.getElementById('gameView').classList.add('hidden');
+        document.getElementById('levelCompleteModal').classList.add('hidden');
+    }
+
+    updateEggStatus() {
+        const container = document.getElementById('eggContainer');
+        if (APP_DATA.hasPendingEgg) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center animate-bounce">
+                    <span class="text-5xl hatching cursor-pointer">🥚</span>
+                    <span class="text-xs font-bold text-orange-500 mt-2">¡TOCA PARA ABRIR!</span>
+                </div>
+            `;
+            container.classList.add('bg-yellow-100', 'border-yellow-300');
+        } else {
+            container.innerHTML = `<span class="text-gray-400 text-xs text-center italic">Completa niveles para<br>ganar huevos.</span>`;
+            container.classList.remove('bg-yellow-100', 'border-yellow-300');
+        }
+    }
+
+    renderPets() {
+        const grid = document.getElementById('petGrid');
+        grid.innerHTML = '';
+        const totalSlots = Math.max(12, APP_DATA.petsUnlocked.length + 4);
+        
+        for(let i=0; i<totalSlots; i++) {
+            const slot = document.createElement('div');
+            if (i < APP_DATA.petsUnlocked.length) {
+                slot.className = 'pet-slot border-green-200 bg-white text-4xl';
+                slot.textContent = APP_DATA.petsUnlocked[i];
+            } else {
+                slot.className = 'pet-slot empty';
+                slot.textContent = '?';
+            }
+            grid.appendChild(slot);
+        }
+    }
+
+    hatchEgg() {
+        if (!APP_DATA.hasPendingEgg) return;
+        APP_DATA.hasPendingEgg = false;
+        
+        // Seleccionar mascota usando la lista barajada
+        // Filtramos las que ya tenemos
+        const availablePets = APP_DATA.shuffledPetCollection.filter(p => !APP_DATA.petsUnlocked.includes(p));
+        
+        // Si quedan disponibles, tomamos la primera (que ya está aleatorizada por el shuffle inicial)
+        // Si no, tomamos una aleatoria cualquiera
+        const newPet = availablePets.length > 0 
+            ? availablePets[0] 
+            : APP_DATA.masterPetCollection[Math.floor(Math.random() * APP_DATA.masterPetCollection.length)];
+            
+        APP_DATA.petsUnlocked.push(newPet);
+        
+        confetti({ particleCount: 100, spread: 70, origin: { x: 0.8, y: 0.5 }, colors: ['#fcd34d', '#4ade80'] });
+        this.renderPets();
+        this.updateEggStatus();
+    }
+
+    startLevel(levelIdx) {
+        this.currentLevelIdx = levelIdx;
+        this.problemsSolvedInLevel = 0;
+        const levelConfig = APP_DATA.levels[levelIdx];
+
+        document.getElementById('mainMenu').classList.add('hidden');
+        document.getElementById('gameView').classList.remove('hidden');
+        document.getElementById('levelTitleDisplay').textContent = levelConfig.id;
+        document.getElementById('progressTotal').textContent = levelConfig.count;
+        
+        this.loadNextProblem();
+    }
+
+    loadNextProblem() {
+        document.getElementById('progressCurrent').textContent = this.problemsSolvedInLevel + 1;
+        document.getElementById('problemCompleteModal').classList.add('hidden');
+        
+        const levelConfig = APP_DATA.levels[this.currentLevelIdx];
+        const problem = this.generateProblem(levelConfig);
+        window.game.startNewGame(problem.dividend, problem.divisor);
+    }
+
+    generateProblem(config) {
+        let divisor = Math.floor(Math.random() * (config.divisorRange[1] - config.divisorRange[0] + 1)) + config.divisorRange[0];
+        let minQuotient = Math.pow(10, config.digits - 2); 
+        let maxQuotient = Math.pow(10, config.digits - 1); 
+        let quotient = Math.floor(Math.random() * (maxQuotient - minQuotient)) + minQuotient;
+        
+        let dividend = quotient * divisor;
+        
+        if (!config.exact) {
+            if (Math.random() > 0.3) {
+                const remainder = Math.floor(Math.random() * (divisor - 1)) + 1;
+                dividend += remainder;
+            }
+        }
+        
+        while (dividend.toString().length !== config.digits) {
+             divisor = Math.floor(Math.random() * (config.divisorRange[1] - config.divisorRange[0] + 1)) + config.divisorRange[0];
+             quotient = Math.floor(Math.random() * (maxQuotient - minQuotient * 2)) + minQuotient;
+             dividend = quotient * divisor;
+             if (!config.exact && Math.random() > 0.3) {
+                 dividend += Math.floor(Math.random() * (divisor - 1)) + 1;
+             }
+        }
+        return { dividend, divisor };
+    }
+
+    problemSolved() {
+        this.problemsSolvedInLevel++;
+        const levelConfig = APP_DATA.levels[this.currentLevelIdx];
+        
+        confetti({ particleCount: 30, spread: 40, origin: { y: 0.7 }, colors: ['#4ade80', '#22c55e'] });
+
+        if (this.problemsSolvedInLevel >= levelConfig.count) {
+            this.missionComplete();
+        } else {
+            setTimeout(() => {
+                document.getElementById('problemCompleteModal').classList.remove('hidden');
+            }, 800);
+        }
+    }
+
+    missionComplete() {
+        confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+        if (this.currentLevelIdx + 1 === APP_DATA.progress && APP_DATA.progress < APP_DATA.levels.length) {
+            APP_DATA.progress++;
+        }
+        APP_DATA.hasPendingEgg = true;
+        setTimeout(() => {
+            document.getElementById('levelCompleteModal').classList.remove('hidden');
+        }, 1000);
+    }
+
+    finishLevel() {
+        document.getElementById('levelCompleteModal').classList.add('hidden');
+        this.goToMenu();
+    }
+
+    nextProblem() {
+        this.loadNextProblem();
+    }
+
+    goToMenu() {
+        this.renderMenu();
+    }
+}
+
+const app = new AppManager();
+
+/**
+ * Motor del Juego (Canvas)
+ */
+class DivisionEngine {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.container = document.getElementById('canvasContainer');
+        this.msgBox = document.getElementById('messageText');
+        this.inputEl = document.getElementById('virtualInput');
+        this.actionBtn = document.getElementById('mainActionBtn');
+        this.numpad = document.getElementById('numpad');
+
+        this.DIVIDEND = 0;
+        this.DIVISOR = 0;
+        this.steps = [];
+        this.state = {
+            stepIndex: -1, 
+            inputValue: '',
+            history: { quotient: [], products: [], residues: [], partials: [] },
+            highlightInfo: null,
+            waitingForContinue: false
+        };
+        this.alignmentMap = [];
+
+        this.logicalWidth = 800;
+        this.logicalHeight = 600;
+        this.config = {
+            startX: 200,
+            startY: 100,
+            spacing: 50,
+            lineH: 60,
+            fontMain: 'bold 40px "Fredoka"',
+            colors: {
+                text: '#14532d', // Verde oscuro
+                accent: '#ea580c', // Naranja
+                highlight: 'rgba(250, 204, 21, 0.4)', // Amarillo
+                success: '#16a34a',
+                error: '#dc2626',
+                pencil: '#57534e' // Gris piedra
+            }
+        };
+
+        this.initListeners();
+    }
+
+    initListeners() {
+        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('keydown', (e) => {
+            if (document.getElementById('gameView').classList.contains('hidden')) return;
+            if (this.state.stepIndex === -1) return; 
+            if (e.key >= '0' && e.key <= '9') this.inputDigit(parseInt(e.key));
+            else if (e.key === 'Backspace') this.deleteDigit();
+            else if (e.key === 'Enter') {
+                if (!this.actionBtn.classList.contains('hidden')) this.handleAction();
+                else this.submitInput();
+            }
+        });
+    }
+
+    startNewGame(dividend, divisor) {
+        this.DIVIDEND = dividend;
+        this.DIVISOR = divisor;
+        this.state = {
+            stepIndex: 0,
+            inputValue: '',
+            history: { quotient: [], products: [], residues: [], partials: [] },
+            highlightInfo: null,
+            waitingForContinue: false
+        };
+        this.alignmentMap = [];
+        this.steps = this.solveDivision(dividend, divisor);
+        this.actionBtn.classList.add('hidden');
+        this.numpad.classList.remove('hidden');
+        this.resize();
+        this.updateUI();
+        this.showInputForCurrentStep();
+    }
+
+    solveDivision(dividend, divisor) {
+        const digits = dividend.toString().split('').map(Number);
+        const steps = [];
+        let currentVal = 0;
+        let currentIndex = 0;
+        
+        let tempVal = digits[0];
+        let digitsTaken = 1;
+        
+        if (tempVal < divisor && digits.length > 1) {
+            tempVal = tempVal * 10 + digits[1];
+            digitsTaken = 2;
+        }
+
+        currentVal = tempVal;
+        currentIndex = digitsTaken - 1;
+
+        this.state.highlightInfo = { start: 0, length: digitsTaken, row: 0, isPartial: false };
+        this.alignmentMap.push(currentIndex);
+
+        while (true) {
+            const q = Math.floor(currentVal / divisor);
+            steps.push({ type: 'COC', correct: q, msg: `¿Cuántas veces cabe ${divisor} en ${currentVal}?` });
+
+            const currentRow = this.alignmentMap.length - 1;
+            const prod = q * divisor;
+            steps.push({ type: 'PROD', correct: prod, msg: `Multiplica ${q} × ${divisor} y escríbelo.`, row: currentRow });
+
+            const rem = currentVal - prod;
+            const hasMore = currentIndex < digits.length - 1;
+            let nextPartVal = null;
+            let bringIdx = null;
+
+            if (hasMore) {
+                currentIndex++; 
+                this.alignmentMap.push(currentIndex);
+                const nextDigit = digits[currentIndex];
+                bringIdx = currentIndex;
+                nextPartVal = rem * 10 + nextDigit;
+                currentVal = nextPartVal;
+            }
+
+            steps.push({ 
+                type: 'RESTO', 
+                correct: rem, 
+                msg: hasMore ? `Resta ${prod} para ver cuánto sobra.` : (rem === 0 ? `Resta ${prod}. ¡Es exacto!` : `Resta ${prod}. Sobran ${rem}.`), 
+                row: currentRow,
+                isFinal: !hasMore,
+                nextPart: nextPartVal, 
+                bringIdx: bringIdx 
+            });
+
+            if (!hasMore) break;
+        }
+        return steps;
+    }
+
+    resize() {
+        const rect = this.container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const targetHeight = rect.width * (this.logicalHeight / this.logicalWidth);
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = targetHeight * dpr;
+        this.canvas.style.width = `${rect.width}px`;
+        this.canvas.style.height = `${targetHeight}px`;
+        this.ctx.scale(dpr * (rect.width / this.logicalWidth), dpr * (rect.width / this.logicalWidth));
+        this.draw();
+        if (!this.inputEl.classList.contains('hidden')) this.positionInput();
+    }
+
+    handleAction() {
+        if (this.state.waitingForContinue) {
+            this.state.waitingForContinue = false;
+            this.actionBtn.classList.add('hidden');
+            this.numpad.classList.remove('hidden');
+            const lastRestoStep = this.steps[this.state.stepIndex];
+            this.state.stepIndex++; 
+            const currentRow = lastRestoStep.row; 
+            const nextNumStr = String(lastRestoStep.nextPart);
+            this.state.highlightInfo = { start: 0, length: nextNumStr.length, isPartial: true, row: currentRow + 1 };
+            this.updateUI();
+            this.showInputForCurrentStep();
+        }
+    }
+
+    inputDigit(digit) {
+        if (this.inputEl.classList.contains('hidden')) return;
+        const currentStep = this.steps[this.state.stepIndex];
+        const maxLen = String(currentStep.correct).length;
+        if (this.state.inputValue.length < maxLen) {
+            this.state.inputValue += String(digit); 
+            this.inputEl.value = this.state.inputValue;
+        }
+    }
+
+    deleteDigit() {
+        this.state.inputValue = this.state.inputValue.slice(0, -1);
+        this.inputEl.value = this.state.inputValue;
+    }
+
+    submitInput() {
+        if (this.inputEl.classList.contains('hidden') || this.state.inputValue === '') return;
+        const val = parseInt(this.state.inputValue, 10);
+        const currentStep = this.steps[this.state.stepIndex];
+
+        if (val === currentStep.correct) {
+            this.inputEl.classList.remove('bg-red-100', 'border-red-500');
+            this.handleCorrectAnswer(val, currentStep);
+        } else {
+            this.inputEl.classList.add('bg-red-100', 'border-red-500');
+            this.showMessage("🤔 Ups, intenta de nuevo.", true);
+            setTimeout(() => {
+                this.state.inputValue = '';
+                this.inputEl.value = '';
+            }, 800);
+        }
+    }
+
+    handleCorrectAnswer(val, step) {
+        if (step.type === 'COC') this.state.history.quotient.push(val);
+        if (step.type === 'PROD') this.state.history.products.push({val, row: step.row});
+        if (step.type === 'RESTO') this.state.history.residues.push({val, row: step.row});
+
+        this.state.inputValue = '';
+        this.inputEl.classList.add('hidden');
+        this.inputEl.value = '';
+
+        if (step.isFinal) {
+            this.numpad.classList.add('hidden');
+            this.draw();
+            app.problemSolved(); 
+            return;
+        }
+
+        if (step.type === 'RESTO' && step.nextPart !== null) {
+            this.state.waitingForContinue = true;
+            this.numpad.classList.add('hidden');
+            this.actionBtn.classList.remove('hidden');
+            this.state.history.partials.push({ val: step.nextPart, row: step.row + 1 });
+            const digitBroughtDown = String(step.nextPart).slice(-1);
+            this.showMessage(`¡Bien! Baja el <strong>${digitBroughtDown}</strong>. Tienes <strong>${step.nextPart}</strong>.`);
+            this.draw(); 
+        } else {
+            this.state.stepIndex++;
+            this.updateUI();
+            this.showInputForCurrentStep();
+        }
+    }
+
+    updateUI() {
+        const step = this.steps[this.state.stepIndex];
+        this.showMessage(step.msg);
+        this.draw();
+    }
+
+    showMessage(html, isError = false) {
+        this.msgBox.innerHTML = html;
+        const container = document.getElementById('messageBox');
+        container.className = `w-full p-5 rounded-2xl shadow-md mb-6 min-h-[80px] flex items-center text-xl font-medium relative overflow-hidden border-l-8 transition-colors ${isError ? 'bg-red-50 border-red-400 text-red-700' : 'bg-white border-green-500 text-green-800'}`;
+    }
+
+    showInputForCurrentStep() {
+        this.positionInput();
+        this.inputEl.classList.remove('hidden');
+        this.inputEl.focus();
+    }
+
+    getAlignedX(row, numberLength) {
+        const { startX, spacing } = this.config;
+        const colIndex = this.alignmentMap[row];
+        const rightmostX = startX + (colIndex * spacing);
+        const leftmostX = rightmostX - ((numberLength - 1) * spacing);
+        return (leftmostX + rightmostX) / 2;
+    }
+    
+    drawAlignedNumber(str, row, y, color) {
+        const { startX, spacing } = this.config;
+        const colIndex = this.alignmentMap[row];
+        const rightmostX = startX + (colIndex * spacing);
+        this.ctx.fillStyle = color;
+        for (let i = 0; i < str.length; i++) {
+            const char = str[str.length - 1 - i];
+            const x = rightmostX - (i * spacing);
+            this.ctx.fillText(char, x, y);
+        }
+        return { left: rightmostX - (str.length-1)*spacing, right: rightmostX };
+    }
+
+    positionInput() {
+        const step = this.steps[this.state.stepIndex];
+        let lx, ly;
+        const { startX, startY, spacing, lineH } = this.config;
+
+        if (step.type === 'COC') {
+            const idx = this.state.history.quotient.length;
+            const divLen = String(this.DIVIDEND).length;
+            const separatorX = startX + (divLen * spacing) + 20;
+            lx = separatorX + (spacing * 0.8 * idx) + 40; 
+            ly = startY + 50; 
+        } else {
+            const row = step.row;
+            const yBase = startY + lineH + (row * lineH * 2.5);
+            lx = this.getAlignedX(row, String(step.correct).length);
+            ly = (step.type === 'PROD') ? yBase : yBase + lineH;
+        }
+
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = rect.width / this.logicalWidth;
+        const scaleY = rect.height / this.logicalHeight;
+
+        this.inputEl.style.left = `${lx * scaleX}px`;
+        this.inputEl.style.top = `${ly * scaleY}px`;
+    }
+
+    draw() {
+        const ctx = this.ctx;
+        const { startX, startY, spacing, lineH, colors, fontMain } = this.config;
+        ctx.clearRect(0, 0, this.logicalWidth, this.logicalHeight);
+        ctx.strokeStyle = colors.pencil;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        const divStr = String(this.DIVIDEND);
+        const divLen = divStr.length;
+        const separatorX = startX + (divLen * spacing) + 20;
+        
+        ctx.beginPath();
+        ctx.moveTo(separatorX, startY - 40);
+        ctx.lineTo(separatorX, startY + (this.state.history.products.length * lineH * 2.5) + 150);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(separatorX, startY + 10);
+        ctx.lineTo(separatorX + (String(this.DIVISOR).length * spacing) + 40, startY + 10);
+        ctx.stroke();
+
+        ctx.font = fontMain;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.fillStyle = colors.accent;
+        ctx.fillText(this.DIVISOR, separatorX + spacing, startY - 20);
+
+        for(let i=0; i<divLen; i++) {
+            const x = startX + (i * spacing);
+            const y = startY - 20;
+            if (this.state.highlightInfo && !this.state.highlightInfo.isPartial && !this.state.waitingForContinue) {
+                if (i >= this.state.highlightInfo.start && i < (this.state.highlightInfo.start + this.state.highlightInfo.length)) {
+                     ctx.fillStyle = colors.highlight;
+                     ctx.fillRect(x - spacing/2, y - 30, spacing, 60);
+                }
+            }
+            ctx.fillStyle = colors.text;
+            ctx.fillText(divStr[i], x, y);
+        }
+
+        this.state.history.quotient.forEach((digit, idx) => {
+            ctx.fillStyle = colors.success;
+            ctx.fillText(digit, separatorX + (spacing * 0.8 * idx) + 40, startY + 50);
+        });
+
+        this.state.history.products.forEach((p, i) => {
+            const yBase = startY + lineH + (i * lineH * 2.5);
+            const pStr = String(p.val);
+            const bounds = this.drawAlignedNumber(pStr, i, yBase, colors.pencil);
+            ctx.beginPath();
+            ctx.moveTo(bounds.left - 10, yBase + 25);
+            ctx.lineTo(bounds.right + 10, yBase + 25);
+            ctx.stroke();
+            ctx.font = "20px Fredoka";
+            ctx.fillText("-", bounds.left - 20, yBase);
+            ctx.font = fontMain;
+            if (this.state.history.residues[i]) {
+                const r = this.state.history.residues[i];
+                this.drawAlignedNumber(String(r.val), i, yBase + lineH, '#16a34a');
+            }
+        });
+
+        this.state.history.partials.forEach((partial, idx) => {
+            const yBase = startY + lineH + (idx * lineH * 2.5) + lineH; 
+            const pStr = String(partial.val);
+            if (this.state.highlightInfo && this.state.highlightInfo.isPartial && this.state.highlightInfo.row === idx + 1 && !this.state.waitingForContinue) {
+                const colIdx = this.alignmentMap[idx + 1];
+                const rX = startX + (colIdx * spacing);
+                const lX = rX - (pStr.length-1)*spacing;
+                const w = (pStr.length * spacing);
+                ctx.fillStyle = colors.highlight;
+                ctx.fillRect(lX - spacing/2, yBase - 30, w, 60);
+            }
+            this.drawAlignedNumber(pStr, idx + 1, yBase, '#16a34a');
+        });
+
+        if (this.state.waitingForContinue) {
+            const lastResidueIdx = this.state.history.residues.length - 1;
+            const bringIdx = this.steps[this.state.stepIndex].bringIdx;
+            const xFrom = startX + (bringIdx * spacing);
+            const yFrom = startY + 15;
+            const yBase = startY + lineH + (lastResidueIdx * lineH * 2.5) + lineH;
+            const nextColIdx = this.alignmentMap[lastResidueIdx + 1];
+            const xTo = startX + (nextColIdx * spacing);
+            this.drawArrow(ctx, xFrom, yFrom, xTo, yBase - 20);
+        }
+    }
+
+    drawArrow(ctx, x1, y1, x2, y2) {
+        ctx.strokeStyle = '#ea580c'; 
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.bezierCurveTo(x1, y1 + 50, x2, y2 - 50, x2, y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ea580c';
+        ctx.beginPath();
+        ctx.moveTo(x2, y2 + 10);
+        ctx.lineTo(x2 - 8, y2 - 8);
+        ctx.lineTo(x2 + 8, y2 - 8);
+        ctx.fill();
+    }
+}
+
+window.game = new DivisionEngine();
+</script>
+</body>
+</html>
